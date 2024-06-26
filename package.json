@@ -1,16 +1,28 @@
 {
   "name": "errsole-postgres",
-  "version": "0.0.1",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "postgreSQL storage plugin for Errsole",
+  "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "errsole",
+    "postgres",
+    "postgreSQL",
+    "log",
+    "logs",
+    "logging",
+    "logger"
+  ],
   "author": "Rishi Kumar",
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "events": "^3.3.0",
-    "pg": "^8.12.0"
-  }
+    "pg": "^8.12.0",
+    "node-cron": "^3.0.3"
+  },
+  "files": [
+    "lib/index.js"
+  ]
 }
