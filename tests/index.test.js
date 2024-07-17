@@ -362,7 +362,264 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  // Additional tests go here
+  describe('#getLogs', () => {
+    it('should retrieve logs with no filters', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs();
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1'),
+        [100]
+      );
+      expect(result).toEqual({ items: logs });
+    });
+
+    it('should apply hostname and pid filters', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const filters = {
+        hostname: 'localhost',
+        pid: 1234,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE hostname = $1 AND pid = $2 ORDER BY id DESC LIMIT $3'),
+        ['localhost', 1234, 50]
+      );
+      expect(result).toEqual({ items: logs });
+    });
+
+    it('should apply sources and levels filters', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const filters = {
+        sources: ['test'],
+        levels: ['info'],
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE source = ANY($1) AND level = ANY($2) ORDER BY id DESC LIMIT $3'),
+        [['test'], ['info'], 50]
+      );
+      expect(result).toEqual({ items: logs });
+    });
+
+    it('should apply lt_id filter', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const filters = {
+        lt_id: 10,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
+        [10, 50]
+      );
+      expect(result).toEqual({ items: logs });
+    });
+
+    it('should apply gt_id filter', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const filters = {
+        gt_id: 5,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id > $1 ORDER BY id ASC LIMIT $2'),
+        [5, 50]
+      );
+      expect(result).toEqual({ items: logs });
+    });
+
+    it('should reverse the result if shouldReverse is true', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' },
+        { id: 2, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'another message' }
+      ];
+      const filters = {
+        lt_id: 10,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
+        [10, 50]
+      );
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should handle errors during log retrieval', async () => {
+      poolMock.query.mockRejectedValueOnce(new Error('Query error'));
+
+      await expect(errsolePostgres.getLogs()).rejects.toThrow('Query error');
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1'),
+        [100]
+      );
+    });
+  });
+
+  describe('#searchLogs', () => {
+    it('should retrieve logs with search terms only', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 ORDER BY id DESC LIMIT $3'),
+        ['%test%', '%message%', 100]
+      );
+      expect(result).toEqual({ items: logs, filters: { limit: 100 } });
+    });
+
+    it('should apply hostname and pid filters with search terms', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      const filters = {
+        hostname: 'localhost',
+        pid: 1234,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 AND hostname = $3 AND pid = $4 ORDER BY id DESC LIMIT $5'),
+        ['%test%', '%message%', 'localhost', 1234, 50]
+      );
+      expect(result).toEqual({ items: logs, filters });
+    });
+
+    it('should apply sources and levels filters with search terms', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      const filters = {
+        sources: ['test'],
+        levels: ['info'],
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 AND source = ANY($3) AND level = ANY($4) ORDER BY id DESC LIMIT $5'),
+        ['%test%', '%message%', ['test'], ['info'], 50]
+      );
+      expect(result).toEqual({ items: logs, filters });
+    });
+
+    it('should apply lt_id filter with search terms', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      const filters = {
+        lt_id: 10,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 AND id < $3 ORDER BY id DESC LIMIT $4'),
+        ['%test%', '%message%', 10, 50]
+      );
+      expect(result).toEqual({ items: logs, filters });
+    });
+
+    it('should apply gt_id filter with search terms', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      const filters = {
+        gt_id: 5,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 AND id > $3 ORDER BY id ASC LIMIT $4'),
+        ['%test%', '%message%', 5, 50]
+      );
+      expect(result).toEqual({ items: logs, filters });
+    });
+
+    it('should reverse the result if shouldReverse is true', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' },
+        { id: 2, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'another message' }
+      ];
+      const searchTerms = ['test', 'message'];
+      const filters = {
+        lt_id: 10,
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 AND id < $3 ORDER BY id DESC LIMIT $4'),
+        ['%test%', '%message%', 10, 50]
+      );
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should handle errors during log search', async () => {
+      const searchTerms = ['test', 'message'];
+      poolMock.query.mockRejectedValueOnce(new Error('Query error'));
+
+      await expect(errsolePostgres.searchLogs(searchTerms)).rejects.toThrow('Query error');
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE message ILIKE $1 AND message ILIKE $2 ORDER BY id DESC LIMIT $3'),
+        ['%test%', '%message%', 100]
+      );
+    });
+  });
 
   afterAll(() => {
     // Stop the cron job
