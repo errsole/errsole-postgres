@@ -3,6 +3,7 @@
   "version": "1.0.1",
   "description": "postgreSQL storage plugin for Errsole",
   "main": "lib/index.js",
+  "types": "types/index.d.ts",
   "scripts": {
     "test": "jest --coverage",
     "coveralls": "jest --coverage && cat ./coverage/lcov.info | coveralls"
@@ -24,7 +25,8 @@
     "pg": "^8.12.0"
   },
   "files": [
-    "lib/index.js"
+    "lib",
+    "types"
   ],
   "devDependencies": {
     "@jest/globals": "^29.7.0",
