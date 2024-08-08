@@ -1,7 +1,7 @@
 {
   "name": "errsole-postgres",
   "version": "1.0.1",
-  "description": "postgreSQL storage plugin for Errsole",
+  "description": "PostgreSQL storage plugin for Errsole",
   "main": "lib/index.js",
   "types": "types/index.d.ts",
   "scripts": {
