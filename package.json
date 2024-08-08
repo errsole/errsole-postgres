@@ -10,7 +10,9 @@
   },
   "keywords": [
     "errsole",
+    "pg",
     "postgres",
+    "postgresql",
     "log",
     "logs",
     "logging",
