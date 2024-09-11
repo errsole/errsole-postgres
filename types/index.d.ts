@@ -10,6 +10,7 @@ declare module 'errsole-postgres' {
       level: string;
       message: string;
       meta?: string;
+      errsole_id?: number;
     }
   
     interface LogFilter {
@@ -23,6 +24,7 @@ declare module 'errsole-postgres' {
       lte_timestamp?: Date;
       gte_timestamp?: Date;
       limit?: number;
+      errsole_id?: number;
     }
   
     interface Config {
@@ -44,7 +46,7 @@ declare module 'errsole-postgres' {
       getConfig(key: string): Promise<{ item: Config }>;
       setConfig(key: string, value: string): Promise<{ item: Config }>;
       deleteConfig(key: string): Promise<{}>;
-  
+      getHostnames(): Promise<{ items: string[] }>;
       postLogs(logEntries: Log[]): Promise<{}>;
       getLogs(filters?: LogFilter): Promise<{ items: Log[] }>;
       searchLogs(searchTerms: string[], filters?: LogFilter): Promise<{ items: Log[], filters: LogFilter[] }>;
