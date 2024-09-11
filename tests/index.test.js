@@ -189,10 +189,10 @@ describe('ErrsolePostgres', () => {
       await errsolePostgres.createTables();
 
       const createTableCalls = [
-        expect.stringContaining('CREATE TABLE IF NOT EXISTS errsole_logs_v1'),
-        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v1_source_level_id_idx'),
-        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v1_source_level_timestamp_idx'),
-        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v1_hostname_pid_id_idx'),
+        expect.stringContaining('CREATE TABLE IF NOT EXISTS errsole_logs_v2'),
+        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v2_source_level_id_idx'),
+        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v2_source_level_timestamp_idx'),
+        expect.stringContaining('CREATE INDEX IF NOT EXISTS errsole_logs_v2_hostname_pid_id_idx'),
         expect.stringContaining('CREATE TABLE IF NOT EXISTS errsole_users'),
         expect.stringContaining('CREATE TABLE IF NOT EXISTS errsole_config')
       ];
@@ -586,7 +586,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs();
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2'),
         [100]
       );
       expect(result).toEqual({ items: logs });
@@ -606,7 +606,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE hostname = $1 AND pid = $2 ORDER BY id DESC LIMIT $3'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE hostname = $1 AND pid = $2 ORDER BY id DESC LIMIT $3'),
         ['localhost', 1234, 50]
       );
       expect(result).toEqual({ items: logs });
@@ -626,7 +626,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE source = ANY($1) AND level = ANY($2) ORDER BY id DESC LIMIT $3'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE source = ANY($1) AND level = ANY($2) ORDER BY id DESC LIMIT $3'),
         [['test'], ['info'], 50]
       );
       expect(result).toEqual({ items: logs });
@@ -645,7 +645,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
         [10, 50]
       );
       expect(result).toEqual({ items: logs });
@@ -664,7 +664,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id > $1 ORDER BY id ASC LIMIT $2'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE id > $1 ORDER BY id ASC LIMIT $2'),
         [5, 50]
       );
       expect(result).toEqual({ items: logs });
@@ -683,7 +683,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE timestamp <= $1 ORDER BY id DESC LIMIT $2'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE timestamp <= $1 ORDER BY id DESC LIMIT $2'),
         [new Date('2023-01-02T00:00:00Z'), 50]
       );
       expect(result).toEqual({ items: logs });
@@ -705,7 +705,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2'),
         expect.arrayContaining(['test', 'info', 'another_test', 'warn', 50])
       );
       expect(result).toEqual({ items: logs });
@@ -724,7 +724,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE timestamp >= $1 ORDER BY id ASC LIMIT $2'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE timestamp >= $1 ORDER BY id ASC LIMIT $2'),
         [new Date('2023-01-01T00:00:00Z'), 50]
       );
       expect(result).toEqual({ items: logs });
@@ -744,7 +744,7 @@ describe('ErrsolePostgres', () => {
       const result = await errsolePostgres.getLogs(filters);
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE id < $1 ORDER BY id DESC LIMIT $2'),
         [10, 50]
       );
       expect(result.items).toEqual(logs.reverse());
@@ -756,7 +756,7 @@ describe('ErrsolePostgres', () => {
       await expect(errsolePostgres.getLogs()).rejects.toThrow('Query error');
 
       expect(poolMock.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message FROM errsole_logs_v1'),
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2'),
         [100]
       );
     });
@@ -1048,7 +1048,7 @@ describe('ErrsolePostgres', () => {
 
       const result = await errsolePostgres.getMeta(1);
 
-      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v1 WHERE id = $1', [1]);
+      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v2 WHERE id = $1', [1]);
       expect(result).toEqual({ item: logMeta });
     });
 
@@ -1057,7 +1057,7 @@ describe('ErrsolePostgres', () => {
 
       await expect(errsolePostgres.getMeta(999)).rejects.toThrow('Log entry not found.');
 
-      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v1 WHERE id = $1', [999]);
+      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v2 WHERE id = $1', [999]);
     });
 
     it('should handle errors during query execution', async () => {
@@ -1066,7 +1066,7 @@ describe('ErrsolePostgres', () => {
 
       await expect(errsolePostgres.getMeta(1)).rejects.toThrow('Query error');
 
-      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v1 WHERE id = $1', [1]);
+      expect(poolMock.query).toHaveBeenCalledWith('SELECT id, meta FROM errsole_logs_v2 WHERE id = $1', [1]);
     });
   });
 
