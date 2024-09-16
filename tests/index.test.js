@@ -573,6 +573,11 @@ describe('ErrsolePostgres', () => {
   });
 
   describe('#getLogs', () => {
+    let poolQuerySpy;
+
+    beforeEach(() => {
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+    });
     afterEach(() => {
       jest.clearAllMocks();
     });
@@ -750,6 +755,127 @@ describe('ErrsolePostgres', () => {
       expect(result.items).toEqual(logs.reverse());
     });
 
+    it('should retrieve logs filtered by a single hostname', async () => {
+      const mockLogs = [
+        {
+          id: 1,
+          hostname: 'localhost',
+          pid: 1234,
+          source: 'test',
+          timestamp: new Date(),
+          level: 'info',
+          message: 'Test message 1',
+          errsole_id: 'err1'
+        }
+      ];
+      const filters = {
+        hostnames: ['localhost'],
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE hostname = ANY($1)'),
+        [['localhost'], 50]
+      );
+      expect(result).toEqual({ items: mockLogs });
+    });
+
+    it('should retrieve logs filtered by multiple hostnames', async () => {
+      const mockLogs = [
+        {
+          id: 2,
+          hostname: 'server1',
+          pid: 5678,
+          source: 'test',
+          timestamp: new Date(),
+          level: 'error',
+          message: 'Test message 2',
+          errsole_id: 'err2'
+        },
+        {
+          id: 3,
+          hostname: 'server2',
+          pid: 9101,
+          source: 'test',
+          timestamp: new Date(),
+          level: 'warn',
+          message: 'Test message 3',
+          errsole_id: 'err3'
+        }
+      ];
+      const filters = {
+        hostnames: ['server1', 'server2'],
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE hostname = ANY($1)'),
+        [['server1', 'server2'], 50]
+      );
+      expect(result).toEqual({ items: mockLogs });
+    });
+
+    it('should ignore the hostnames filter if the array is empty', async () => {
+      const mockLogs = [
+        {
+          id: 4,
+          hostname: 'server3',
+          pid: 1121,
+          source: 'test',
+          timestamp: new Date(),
+          level: 'info',
+          message: 'Test message 4',
+          errsole_id: 'err4'
+        }
+      ];
+      const filters = {
+        hostnames: [],
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.not.stringContaining('WHERE hostname = ANY'),
+        [50]
+      );
+      expect(result).toEqual({ items: mockLogs });
+    });
+
+    it('should retrieve all logs if hostnames filter is not provided', async () => {
+      const mockLogs = [
+        {
+          id: 5,
+          hostname: 'server4',
+          pid: 3141,
+          source: 'test',
+          timestamp: new Date(),
+          level: 'debug',
+          message: 'Test message 5',
+          errsole_id: 'err5'
+        }
+      ];
+      const filters = {
+        limit: 50
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.not.stringContaining('WHERE hostname = ANY'),
+        [50]
+      );
+      expect(result).toEqual({ items: mockLogs });
+    });
+
     it('should handle errors during log retrieval', async () => {
       poolMock.query.mockRejectedValueOnce(new Error('Query error'));
 
@@ -760,9 +886,107 @@ describe('ErrsolePostgres', () => {
         [100]
       );
     });
+
+    it('should retrieve logs using level_json filter', async () => {
+      const filters = {
+        level_json: [
+          { source: 'source1', level: 'info' },
+          { source: 'source2', level: 'error' }
+        ],
+        limit: 50
+      };
+
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'source1', level: 'info', message: 'Log 1' },
+        { id: 2, hostname: 'localhost', pid: 5678, source: 'source2', level: 'error', message: 'Log 2' }
+      ];
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE ('
+        ),
+        expect.arrayContaining(['source1', 'info', 'source2', 'error', 50])
+      );
+      expect(result.items).toEqual(logs);
+    });
+
+    it('should retrieve logs using errsole_id filter', async () => {
+      const filters = {
+        errsole_id: 123,
+        limit: 50
+      };
+
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'source1', level: 'info', message: 'Log 1', errsole_id: 123 }
+      ];
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE ('),
+        expect.arrayContaining([123, 50])
+      );
+      expect(result.items).toEqual(logs);
+    });
+
+    it('should retrieve logs using both level_json and errsole_id filters', async () => {
+      const filters = {
+        level_json: [
+          { source: 'source1', level: 'info' }
+        ],
+        errsole_id: 123,
+        limit: 50
+      };
+
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'source1', level: 'info', message: 'Log 1', errsole_id: 123 }
+      ];
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE ('),
+        expect.arrayContaining(['source1', 'info', 123, 50])
+      );
+      expect(result.items).toEqual(logs);
+    });
+
+    it('should return empty array if no logs are found with level_json and errsole_id filters', async () => {
+      const filters = {
+        level_json: [
+          { source: 'source1', level: 'info' }
+        ],
+        errsole_id: 123,
+        limit: 50
+      };
+
+      poolMock.query.mockResolvedValueOnce({ rows: [] });
+
+      const result = await errsolePostgres.getLogs(filters);
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message, errsole_id FROM errsole_logs_v2 WHERE ('),
+        expect.arrayContaining(['source1', 'info', 123, 50])
+      );
+      expect(result.items).toEqual([]);
+    });
   });
 
   describe('#searchLogs', () => {
+    // let poolQuerySpy;
+
+    // beforeEach(() => {
+    //   poolQuerySpy = jest.spyOn(poolMock, 'query');
+    // });
+
     afterEach(() => {
       jest.clearAllMocks();
     });
@@ -1012,6 +1236,138 @@ describe('ErrsolePostgres', () => {
         expect.any(String),
         expect.arrayContaining(['%test%', new Date('2023-01-02T00:00:00Z'), new Date('2023-01-01T00:00:00Z'), 100])
       );
+    });
+
+    it('should search logs filtered by a single hostname', async () => {
+      const mockLogs = [
+        {
+          id: 1,
+          hostname: 'localhost',
+          pid: 1234,
+          source: 'test',
+          timestamp: '2023-01-01T00:00:00Z',
+          level: 'info',
+          message: 'Test search message 1'
+        }
+      ];
+      const searchTerms = ['search'];
+      const filters = {
+        hostnames: ['localhost'],
+        limit: 100
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE message ILIKE $1 AND hostname = ANY($2)'),
+        expect.arrayContaining(['%search%', ['localhost'], 100])
+      );
+      expect(result).toEqual({
+        items: mockLogs,
+        filters: { hostnames: ['localhost'], limit: 100 }
+      });
+    });
+
+    it('should search logs filtered by multiple hostnames', async () => {
+      const mockLogs = [
+        {
+          id: 2,
+          hostname: 'server1',
+          pid: 5678,
+          source: 'test',
+          timestamp: '2023-01-02T00:00:00Z',
+          level: 'error',
+          message: 'Test search message 2'
+        },
+        {
+          id: 3,
+          hostname: 'server2',
+          pid: 9101,
+          source: 'test',
+          timestamp: '2023-01-03T00:00:00Z',
+          level: 'warn',
+          message: 'Test search message 3'
+        }
+      ];
+      const searchTerms = ['search'];
+      const filters = {
+        hostnames: ['server1', 'server2'],
+        limit: 100
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE message ILIKE $1 AND hostname = ANY($2)'),
+        expect.arrayContaining(['%search%', ['server1', 'server2'], 100])
+      );
+      expect(result).toEqual({
+        items: mockLogs,
+        filters: { hostnames: ['server1', 'server2'], limit: 100 }
+      });
+    });
+
+    it('should ignore the hostnames filter if the array is empty', async () => {
+      const mockLogs = [
+        {
+          id: 4,
+          hostname: 'server3',
+          pid: 1121,
+          source: 'test',
+          timestamp: '2023-01-04T00:00:00Z',
+          level: 'info',
+          message: 'Test search message 4'
+        }
+      ];
+      const searchTerms = ['search'];
+      const filters = {
+        hostnames: [],
+        limit: 100
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.not.stringContaining('hostname = ANY'),
+        expect.arrayContaining(['%search%', 100])
+      );
+      expect(result).toEqual({
+        items: mockLogs,
+        filters: { hostnames: [], limit: 100 }
+      });
+    });
+
+    it('should search logs without hostnames filter', async () => {
+      const mockLogs = [
+        {
+          id: 5,
+          hostname: 'server4',
+          pid: 3141,
+          source: 'test',
+          timestamp: '2023-01-05T00:00:00Z',
+          level: 'debug',
+          message: 'Test search message 5'
+        }
+      ];
+      const searchTerms = ['search'];
+      const filters = {
+        limit: 100
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: mockLogs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms, filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.not.stringContaining('hostname = ANY'),
+        expect.arrayContaining(['%search%', 100])
+      );
+      expect(result).toEqual({
+        items: mockLogs,
+        filters: { limit: 100 }
+      });
     });
 
     it('should handle errors in searching logs', async () => {
@@ -1278,6 +1634,95 @@ describe('ErrsolePostgres', () => {
 
       expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
       expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
+    });
+  });
+
+  describe('#getHostnames', () => {
+    let poolQuerySpy;
+
+    beforeEach(() => {
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+      poolMock.query.mockClear(); // Clear any previous calls
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should retrieve a sorted list of distinct hostnames', async () => {
+      const mockHostnames = [
+        { hostname: 'server3.example.com' },
+        { hostname: 'server1.example.com' },
+        { hostname: 'server2.example.com' }
+      ];
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(null, { rows: mockHostnames });
+      });
+
+      const result = await errsolePostgres.getHostnames();
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(expect.stringContaining('SELECT DISTINCT hostname'), expect.any(Function));
+      expect(result).toEqual({ items: ['server1.example.com', 'server2.example.com', 'server3.example.com'] });
+    });
+
+    it('should return an empty array if no hostnames are found', async () => {
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(null, { rows: [] });
+      });
+
+      const result = await errsolePostgres.getHostnames();
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(expect.stringContaining('SELECT DISTINCT hostname'), expect.any(Function));
+      expect(result).toEqual({ items: [] });
+    });
+
+    it('should handle errors during the query execution', async () => {
+      const error = new Error('Database query failed');
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(error, null);
+      });
+
+      await expect(errsolePostgres.getHostnames()).rejects.toThrow('Database query failed');
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(expect.stringContaining('SELECT DISTINCT hostname'), expect.any(Function));
+    });
+
+    it('should correctly sort hostnames with special characters and varying cases', async () => {
+      const mockHostnames = [
+        { hostname: 'Server-2.Example.com' },
+        { hostname: 'server-10.example.com' },
+        { hostname: 'server-1.example.com' },
+        { hostname: 'SERVER-3.EXAMPLE.COM' }
+      ];
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(null, { rows: mockHostnames });
+      });
+
+      const result = await errsolePostgres.getHostnames();
+
+      expect(result).toEqual({
+        items: [
+          'SERVER-3.EXAMPLE.COM',
+          'Server-2.Example.com',
+          'server-1.example.com',
+          'server-10.example.com'
+        ]
+      });
+    });
+
+    // Optional: Performance Test (Note: Jest is not ideal for performance testing, but here's a basic example)
+    it('should retrieve hostnames efficiently with a large dataset', async () => {
+      const largeNumber = 1000;
+      const mockHostnames = Array.from({ length: largeNumber }, (_, i) => ({ hostname: `server${i}.example.com` }));
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(null, { rows: mockHostnames });
+      });
+
+      const result = await errsolePostgres.getHostnames();
+
+      expect(result.items.length).toBe(largeNumber);
+      expect(result.items[0]).toBe('server0.example.com');
+      expect(result.items[largeNumber - 1]).toBe(`server${largeNumber - 1}.example.com`);
     });
   });
 
