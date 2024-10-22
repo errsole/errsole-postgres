@@ -39,6 +39,15 @@ declare module 'errsole-postgres' {
       email: string;
       role: string;
     }
+
+    interface Notification {
+      id?: number;
+      errsole_id: number;
+      hostname: string;
+      hashed_message: string;
+      created_at?: Date;
+      updated_at?: Date;
+    }
   
     class ErrsolePostgres {
       constructor(options: PoolConfig);
@@ -61,6 +70,8 @@ declare module 'errsole-postgres' {
       updateUserByEmail(email: string, updates: Partial<User>): Promise<{ item: User }>;
       updatePassword(email: string, currentPassword: string, newPassword: string): Promise<{ item: User }>;
       deleteUser(userId: number): Promise<{}>;
+      insertNotificationItem(notification: Notification): Promise<{ previousNotificationItem: Notification | null, todayNotificationCount: number }>;
+
     }
   
     export default ErrsolePostgres;
