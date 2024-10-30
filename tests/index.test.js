@@ -1726,6 +1726,171 @@ describe('ErrsolePostgres', () => {
     });
   });
 
+  describe('#insertNotificationItem1', () => {
+    it('should insert a notification item and return the previous item and today\'s notification count', async () => {
+      const notification = {
+        errsole_id: 'test-errsole-id',
+        hostname: 'localhost',
+        hashed_message: 'hashedMessage'
+      };
+
+      // Mock responses for all queries including BEGIN and COMMIT
+      clientMock.query
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({ // fetchPreviousNotificationQuery
+          rows: [{ id: 1, hostname: 'localhost', hashed_message: 'hashedMessage', created_at: new Date() }]
+        })
+        .mockResolvedValueOnce({}) // insertNotificationQuery
+        .mockResolvedValueOnce({ // countTodayNotificationsQuery
+          rows: [{ notificationcount: '3' }] // PostgreSQL returns counts as strings
+        })
+        .mockResolvedValueOnce({}) // COMMIT
+        .mockResolvedValueOnce({}); // Additional Query (e.g., SELECT NOW())
+
+      const result = await errsolePostgres.insertNotificationItem(notification);
+
+      // Expect 6 queries: BEGIN, fetchPrevious, insert, count, COMMIT, additional
+      expect(clientMock.query).toHaveBeenCalledTimes(6);
+
+      expect(result).toEqual({
+        previousNotificationItem: {
+          id: 1,
+          hostname: 'localhost',
+          hashed_message: 'hashedMessage',
+          created_at: expect.any(Date)
+        },
+        todayNotificationCount: '3' // Keeping as string to match PostgreSQL return type
+      });
+    });
+
+    it('should return undefined previous item and todayNotificationCount as "1" when no previous notification exists', async () => {
+      const notification = {
+        errsole_id: 'test-errsole-id',
+        hostname: 'localhost',
+        hashed_message: 'newHashedMessage'
+      };
+
+      clientMock.query
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({ // fetchPreviousNotificationQuery returns no previous items
+          rows: []
+        })
+        .mockResolvedValueOnce({}) // insertNotificationQuery
+        .mockResolvedValueOnce({ // countTodayNotificationsQuery
+          rows: [{ notificationcount: '1' }]
+        })
+        .mockResolvedValueOnce({}) // COMMIT
+        .mockResolvedValueOnce({}); // Additional Query
+
+      const result = await errsolePostgres.insertNotificationItem(notification);
+
+      expect(result).toEqual({
+        previousNotificationItem: undefined, // Accepting undefined instead of null
+        todayNotificationCount: '1'
+      });
+    });
+
+    // it('should handle a database error by rolling back the transaction and return undefined', async () => {
+    //   const notification = {
+    //     errsole_id: 'test-errsole-id',
+    //     hostname: 'localhost',
+    //     hashed_message: 'errorHashedMessage'
+    //   };
+
+    //   clientMock.query
+    //     .mockResolvedValueOnce({}) // BEGIN
+    //     .mockResolvedValueOnce({ // fetchPreviousNotificationQuery returns no previous items
+    //       rows: []
+    //     })
+    //     .mockRejectedValueOnce(new Error('Insert error')); // insertNotificationQuery throws an error
+
+    //   await expect(errsolePostgres.insertNotificationItem(notification)).resolves.toBeUndefined();
+
+    //   // Ensure ROLLBACK was called after the error
+    //   expect(clientMock.query).toHaveBeenNthCalledWith(1, 'BEGIN');
+    //   expect(clientMock.query).toHaveBeenNthCalledWith(2, expect.stringContaining('SELECT * FROM errsole_notifications'), ['localhost', 'errorHashedMessage']);
+    //   expect(clientMock.query).toHaveBeenNthCalledWith(3, expect.stringContaining('INSERT INTO errsole_notifications'), ['localhost', 'test-errsole-id', 'errorHashedMessage']);
+    //   expect(clientMock.query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
+    // });
+
+    it('should handle a database error by rolling back the transaction and return undefined', async () => {
+      const notification = {
+        errsole_id: 'test-errsole-id',
+        hostname: 'localhost',
+        hashed_message: 'errorHashedMessage'
+      };
+
+      clientMock.query.mockImplementation((query, params) => {
+        if (query === 'SELECT NOW()') {
+          return Promise.resolve({ rows: [{ now: '2023-01-01T00:00:00Z' }] });
+        }
+        if (query === 'BEGIN') {
+          return Promise.resolve({});
+        }
+        if (query.includes('SELECT * FROM errsole_notifications')) {
+          return Promise.resolve({ rows: [] }); // No previous notification
+        }
+        if (query.includes('INSERT INTO errsole_notifications')) {
+          return Promise.reject(new Error('Insert error')); // Simulate insert failure
+        }
+        if (query.includes('ROLLBACK')) {
+          return Promise.resolve({});
+        }
+        return Promise.resolve({});
+      });
+
+      const result = await errsolePostgres.insertNotificationItem(notification);
+
+      // Log all query calls for verification
+      console.log('All Query Calls:', clientMock.query.mock.calls);
+
+      // Expect 5 queries: SELECT NOW(), BEGIN, fetch, insert (fails), ROLLBACK
+      expect(clientMock.query).toHaveBeenCalledTimes(5);
+
+      // Specific query assertions
+      expect(clientMock.query).toHaveBeenNthCalledWith(1, 'SELECT NOW()'); // First call: SELECT NOW()
+      expect(clientMock.query).toHaveBeenNthCalledWith(2, 'BEGIN'); // Second call: BEGIN
+      expect(clientMock.query).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('SELECT * FROM errsole_notifications'),
+        ['localhost', 'errorHashedMessage']
+      );
+      expect(clientMock.query).toHaveBeenNthCalledWith(
+        4,
+        expect.stringContaining('INSERT INTO errsole_notifications'),
+        ['localhost', 'test-errsole-id', 'errorHashedMessage']
+      );
+      expect(clientMock.query).toHaveBeenNthCalledWith(5, 'ROLLBACK');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('should release the client after operation', async () => {
+      const notification = {
+        errsole_id: 'test-errsole-id',
+        hostname: 'localhost',
+        hashed_message: 'hashedMessage'
+      };
+
+      // Mock successful transaction with all queries
+      clientMock.query
+        .mockResolvedValueOnce({}) // BEGIN
+        .mockResolvedValueOnce({ // fetchPreviousNotificationQuery
+          rows: [{ id: 1, hostname: 'localhost', hashed_message: 'hashedMessage', created_at: new Date() }]
+        })
+        .mockResolvedValueOnce({}) // insertNotificationQuery
+        .mockResolvedValueOnce({ // countTodayNotificationsQuery
+          rows: [{ notificationcount: '3' }]
+        })
+        .mockResolvedValueOnce({}) // COMMIT
+        .mockResolvedValueOnce({}); // Additional Query
+
+      await errsolePostgres.insertNotificationItem(notification);
+
+      expect(clientMock.release).toHaveBeenCalled();
+    });
+  });
+
   afterAll(() => {
     // Stop the cron job
     cronJob.stop();
