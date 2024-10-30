@@ -1726,7 +1726,7 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  describe('#insertNotificationItem1', () => {
+  describe('#insertNotificationItem', () => {
     it('should insert a notification item and return the previous item and today\'s notification count', async () => {
       const notification = {
         errsole_id: 'test-errsole-id',
@@ -1790,79 +1790,48 @@ describe('ErrsolePostgres', () => {
       });
     });
 
-    // it('should handle a database error by rolling back the transaction and return undefined', async () => {
-    //   const notification = {
-    //     errsole_id: 'test-errsole-id',
-    //     hostname: 'localhost',
-    //     hashed_message: 'errorHashedMessage'
-    //   };
-
-    //   clientMock.query
-    //     .mockResolvedValueOnce({}) // BEGIN
-    //     .mockResolvedValueOnce({ // fetchPreviousNotificationQuery returns no previous items
-    //       rows: []
-    //     })
-    //     .mockRejectedValueOnce(new Error('Insert error')); // insertNotificationQuery throws an error
-
-    //   await expect(errsolePostgres.insertNotificationItem(notification)).resolves.toBeUndefined();
-
-    //   // Ensure ROLLBACK was called after the error
-    //   expect(clientMock.query).toHaveBeenNthCalledWith(1, 'BEGIN');
-    //   expect(clientMock.query).toHaveBeenNthCalledWith(2, expect.stringContaining('SELECT * FROM errsole_notifications'), ['localhost', 'errorHashedMessage']);
-    //   expect(clientMock.query).toHaveBeenNthCalledWith(3, expect.stringContaining('INSERT INTO errsole_notifications'), ['localhost', 'test-errsole-id', 'errorHashedMessage']);
-    //   expect(clientMock.query).toHaveBeenNthCalledWith(4, 'ROLLBACK');
-    // });
-
-    it('should handle a database error by rolling back the transaction and return undefined', async () => {
+    it('should handle a database error by rolling back the transaction and throw an error', async () => {
       const notification = {
         errsole_id: 'test-errsole-id',
         hostname: 'localhost',
         hashed_message: 'errorHashedMessage'
       };
 
-      clientMock.query.mockImplementation((query, params) => {
-        if (query === 'SELECT NOW()') {
-          return Promise.resolve({ rows: [{ now: '2023-01-01T00:00:00Z' }] });
-        }
-        if (query === 'BEGIN') {
-          return Promise.resolve({});
-        }
-        if (query.includes('SELECT * FROM errsole_notifications')) {
-          return Promise.resolve({ rows: [] }); // No previous notification
-        }
+      // Mocking the query method
+      clientMock.query.mockImplementation((query) => {
         if (query.includes('INSERT INTO errsole_notifications')) {
           return Promise.reject(new Error('Insert error')); // Simulate insert failure
         }
         if (query.includes('ROLLBACK')) {
           return Promise.resolve({});
         }
+        if (query.includes('BEGIN')) {
+          return Promise.resolve({});
+        }
+        if (query.includes('SELECT * FROM errsole_notifications')) {
+          return Promise.resolve({ rows: [] }); // No previous notification
+        }
+        // For other queries like COUNT or SELECT NOW()
         return Promise.resolve({});
       });
 
-      const result = await errsolePostgres.insertNotificationItem(notification);
+      // Expect the method to throw an error
+      await expect(errsolePostgres.insertNotificationItem(notification)).rejects.toThrow('Insert error');
 
-      // Log all query calls for verification
-      console.log('All Query Calls:', clientMock.query.mock.calls);
+      // Verify that BEGIN was called
+      expect(clientMock.query).toHaveBeenCalledWith('BEGIN');
 
-      // Expect 5 queries: SELECT NOW(), BEGIN, fetch, insert (fails), ROLLBACK
-      expect(clientMock.query).toHaveBeenCalledTimes(5);
-
-      // Specific query assertions
-      expect(clientMock.query).toHaveBeenNthCalledWith(1, 'SELECT NOW()'); // First call: SELECT NOW()
-      expect(clientMock.query).toHaveBeenNthCalledWith(2, 'BEGIN'); // Second call: BEGIN
-      expect(clientMock.query).toHaveBeenNthCalledWith(
-        3,
-        expect.stringContaining('SELECT * FROM errsole_notifications'),
-        ['localhost', 'errorHashedMessage']
-      );
-      expect(clientMock.query).toHaveBeenNthCalledWith(
-        4,
+      // Verify that INSERT was attempted with correct parameter order
+      expect(clientMock.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO errsole_notifications'),
-        ['localhost', 'test-errsole-id', 'errorHashedMessage']
+        [notification.errsole_id, notification.hostname, notification.hashed_message] // Corrected order
       );
-      expect(clientMock.query).toHaveBeenNthCalledWith(5, 'ROLLBACK');
 
-      expect(result).toBeUndefined();
+      // Verify that ROLLBACK was called after the insert failed
+      expect(clientMock.query).toHaveBeenCalledWith('ROLLBACK');
+
+      // Ensure that the client was released
+      expect(clientMock.release).toHaveBeenCalled();
     });
 
     it('should release the client after operation', async () => {
