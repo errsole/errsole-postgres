@@ -981,11 +981,11 @@ describe('ErrsolePostgres', () => {
   });
 
   describe('#searchLogs', () => {
-    // let poolQuerySpy;
+    let poolQuerySpy;
 
-    // beforeEach(() => {
-    //   poolQuerySpy = jest.spyOn(poolMock, 'query');
-    // });
+    beforeEach(() => {
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+    });
 
     afterEach(() => {
       jest.clearAllMocks();
@@ -1367,6 +1367,42 @@ describe('ErrsolePostgres', () => {
       expect(result).toEqual({
         items: mockLogs,
         filters: { limit: 100 }
+      });
+    });
+
+    it('should apply errsole_id filter in the search query', async () => {
+      const filters = {
+        errsole_id: 123,
+        limit: 50
+      };
+
+      const logs = [
+        {
+          id: 1,
+          hostname: 'localhost',
+          pid: 1234,
+          source: 'source1',
+          timestamp: new Date(),
+          level: 'info',
+          message: 'Log message with specific errsole_id',
+          errsole_id: 123
+        }
+      ];
+
+      poolQuerySpy.mockClear();
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolQuerySpy).toHaveBeenCalledWith(
+        'SELECT id, hostname, pid, source, timestamp, level, message,errsole_id FROM errsole_logs_v2 WHERE (errsole_id = $1) ORDER BY id DESC LIMIT $1',
+        [123, 50]
+      );
+
+      expect(result).toEqual({
+        items: logs,
+        filters: { errsole_id: 123, limit: 50 }
       });
     });
 
@@ -1860,10 +1896,69 @@ describe('ErrsolePostgres', () => {
     });
   });
 
+  describe('#deleteExpiredNotificationItems', () => {
+    let getConfigSpy;
+    let poolQuerySpy;
+    let setTimeoutSpy;
+
+    beforeEach(() => {
+      getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+      setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((callback) => callback());
+      errsolePostgres.deleteExpiredNotificationItemsRunning = false; // Reset the flag before each test
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should delete expired notification items based on TTL configuration', async () => {
+      poolQuerySpy
+        .mockResolvedValueOnce({ rowCount: 1000 }) // First batch of deletions
+        .mockResolvedValueOnce({ rowCount: 0 }); // Second batch indicating no more items
+
+      await errsolePostgres.deleteExpiredNotificationItems();
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(poolQuerySpy).toHaveBeenCalledWith(expect.any(String), [expect.any(String)]);
+      expect(setTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('should handle errors during deletion process and reset running flag', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      poolQuerySpy.mockRejectedValueOnce(new Error('Query error'));
+
+      await errsolePostgres.deleteExpiredNotificationItems();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(new Error('Query error'));
+      expect(errsolePostgres.deleteExpiredNotificationItemsRunning).toBe(false);
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should use default TTL if configuration key is not found', async () => {
+      getConfigSpy.mockResolvedValueOnce({ item: null });
+      poolQuerySpy
+        .mockResolvedValueOnce({ rowCount: 1000 }) // First batch
+        .mockResolvedValueOnce({ rowCount: 0 }); // No more items
+
+      await errsolePostgres.deleteExpiredNotificationItems();
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(poolQuerySpy).toHaveBeenCalledWith(expect.any(String), [expect.any(String)]);
+      expect(setTimeoutSpy).toHaveBeenCalled();
+    });
+
+    it('should reset deleteExpiredNotificationItemsRunning flag after execution', async () => {
+      poolQuerySpy.mockResolvedValueOnce({ rowCount: 0 });
+
+      await errsolePostgres.deleteExpiredNotificationItems();
+
+      expect(errsolePostgres.deleteExpiredNotificationItemsRunning).toBe(false);
+    });
+  });
+
   afterAll(() => {
-    // Stop the cron job
     cronJob.stop();
-    // Clear the interval
     clearInterval(errsolePostgres.flushIntervalId);
   });
 });
