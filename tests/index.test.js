@@ -223,13 +223,13 @@ describe('ErrsolePostgres', () => {
       expect(result).toEqual({ item: config });
     });
 
-    it('should return undefined if configuration key is not found', async () => {
+    it('should return null if configuration key is not found', async () => {
       poolMock.query.mockResolvedValueOnce({ rows: [] });
 
       const result = await errsolePostgres.getConfig('nonexistentKey');
 
       expect(poolMock.query).toHaveBeenCalledWith('SELECT * FROM errsole_config WHERE key = $1', ['nonexistentKey']);
-      expect(result).toEqual({ item: undefined });
+      expect(result).toEqual({ item: null });
     });
 
     it('should handle errors during the query execution', async () => {
