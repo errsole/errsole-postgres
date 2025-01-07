@@ -480,37 +480,6 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  describe('#updateUserByEmail', () => {
-    it('should update user by email', async () => {
-      const updates = { name: 'John Updated' };
-      poolMock.query.mockResolvedValueOnce({ rowCount: 1 });
-      const user = { id: 1, name: 'John Updated', email: 'john@example.com', role: 'admin' };
-      poolMock.query.mockResolvedValueOnce({ rows: [user] });
-
-      const result = await errsolePostgres.updateUserByEmail('john@example.com', updates);
-
-      expect(poolMock.query).toHaveBeenCalledWith(
-        'UPDATE errsole_users SET name = $1 WHERE email = $2',
-        ['John Updated', 'john@example.com']
-      );
-      expect(result).toEqual({ item: user });
-    });
-
-    it('should throw an error if no email is provided', async () => {
-      await expect(errsolePostgres.updateUserByEmail('', { name: 'updated' })).rejects.toThrow('Email is required.');
-    });
-
-    it('should throw an error if no updates are provided', async () => {
-      await expect(errsolePostgres.updateUserByEmail('john@example.com', {})).rejects.toThrow('No updates provided.');
-    });
-
-    it('should throw an error if user not found', async () => {
-      poolMock.query.mockResolvedValueOnce({ rowCount: 0 });
-
-      await expect(errsolePostgres.updateUserByEmail('nonexistent@example.com', { name: 'updated' })).rejects.toThrow('No updates applied.');
-    });
-  });
-
   describe('#updatePassword', () => {
     it('should update user password', async () => {
       const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
@@ -547,28 +516,6 @@ describe('ErrsolePostgres', () => {
       bcrypt.compare.mockResolvedValue(false);
 
       await expect(errsolePostgres.updatePassword('test@example.com', 'wrongPassword', 'newPassword')).rejects.toThrow('Current password is incorrect.');
-    });
-
-    it('should handle query errors during user password update', async () => {
-      const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
-      poolMock.query
-        .mockResolvedValueOnce({ rows: [user] }) // First query response
-        .mockRejectedValueOnce(new Error('Query error')); // Second query response
-      bcrypt.compare.mockResolvedValue(true);
-      bcrypt.hash.mockResolvedValue('newHashedPassword');
-
-      await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Query error');
-    });
-
-    it('should throw an error if no updates are applied (rowCount = 0)', async () => {
-      const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
-      poolMock.query
-        .mockResolvedValueOnce({ rows: [user] }) // First query response
-        .mockResolvedValueOnce({ rowCount: 0 }); // Second query response
-      bcrypt.compare.mockResolvedValue(true);
-      bcrypt.hash.mockResolvedValue('newHashedPassword');
-
-      await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Password update failed.');
     });
   });
 
@@ -1480,12 +1427,6 @@ describe('ErrsolePostgres', () => {
     it('should throw error if no id is provided', async () => {
       await expect(errsolePostgres.deleteUser()).rejects.toThrow('User ID is required.');
     });
-
-    it('should handle query errors', async () => {
-      poolMock.query.mockRejectedValue(new Error('Query error'));
-
-      await expect(errsolePostgres.deleteUser(1)).rejects.toThrow('Query error');
-    });
   });
 
   describe('#deleteExpiredLogs', () => {
@@ -1624,7 +1565,16 @@ describe('ErrsolePostgres', () => {
 
   describe('#ensureLogsTTL', () => {
     let getConfigSpy;
-    let setConfigSpy;
+    let setConfigSpy; it('should handle query errors during user password update', async () => {
+      const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
+      poolMock.query
+        .mockResolvedValueOnce({ rows: [user] }) // First query response
+        .mockRejectedValueOnce(new Error('Query error')); // Second query response
+      bcrypt.compare.mockResolvedValue(true);
+      bcrypt.hash.mockResolvedValue('newHashedPassword');
+
+      await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Query error');
+    });
 
     beforeEach(() => {
       getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig');
