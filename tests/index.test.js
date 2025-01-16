@@ -521,61 +521,58 @@ describe('ErrsolePostgres', () => {
 
   describe('#getUserByEmail', () => {
     let poolQuerySpy;
-  
+
     beforeEach(() => {
       poolQuerySpy = jest.spyOn(poolMock, 'query');
     });
-  
+
     afterEach(() => {
       jest.clearAllMocks();
     });
     it('should throw an error if no email is provided', async () => {
-      // Clear any previous calls made during initialization
       poolQuerySpy.mockClear();
-    
+
       await expect(errsolePostgres.getUserByEmail()).rejects.toThrow('Email is required.');
-    
+
       expect(poolQuerySpy).not.toHaveBeenCalled(); // Ensures no query is made for this case
     });
-    
-  
+
     it('should throw an error if the user is not found', async () => {
       poolQuerySpy.mockResolvedValueOnce({ rows: [] });
-  
+
       await expect(errsolePostgres.getUserByEmail('nonexistent@example.com')).rejects.toThrow('User not found.');
-  
+
       expect(poolQuerySpy).toHaveBeenCalledWith(
         expect.stringContaining('SELECT id, name, email, role FROM'),
         ['nonexistent@example.com']
       );
     });
-  
+
     it('should return the user object if the user is found', async () => {
       const user = { id: 1, name: 'John Doe', email: 'john@example.com', role: 'admin' };
       poolQuerySpy.mockResolvedValueOnce({ rows: [user] });
-  
+
       const result = await errsolePostgres.getUserByEmail('john@example.com');
-  
+
       expect(poolQuerySpy).toHaveBeenCalledWith(
         expect.stringContaining('SELECT id, name, email, role FROM'),
         ['john@example.com']
       );
       expect(result).toEqual({ item: user });
     });
-  
+
     it('should handle database errors gracefully', async () => {
       const error = new Error('Database query failed');
       poolQuerySpy.mockRejectedValueOnce(error);
-  
+
       await expect(errsolePostgres.getUserByEmail('john@example.com')).rejects.toThrow('Database query failed');
-  
+
       expect(poolQuerySpy).toHaveBeenCalledWith(
         expect.stringContaining('SELECT id, name, email, role FROM'),
         ['john@example.com']
       );
     });
   });
-  
 
   describe('#getLogs', () => {
     let poolQuerySpy;
@@ -1962,6 +1959,31 @@ describe('ErrsolePostgres', () => {
       await errsolePostgres.deleteExpiredNotificationItems();
 
       expect(errsolePostgres.deleteExpiredNotificationItemsRunning).toBe(false);
+    });
+  });
+
+  describe('#DeleteAllLogs', () => {
+    it('should successfully truncate the logs table', async () => {
+      const truncateQuery = `TRUNCATE TABLE ${errsolePostgres.logsTable} RESTART IDENTITY CASCADE`;
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(null); // Simulates successful query execution
+      });
+
+      await expect(errsolePostgres.DeleteAllLogs()).resolves.not.toThrow();
+
+      expect(poolMock.query).toHaveBeenCalledWith(truncateQuery, expect.any(Function));
+    });
+
+    it('should handle errors during truncation of the logs table', async () => {
+      const truncateQuery = `TRUNCATE TABLE ${errsolePostgres.logsTable} RESTART IDENTITY CASCADE`;
+      const error = new Error('Truncate query failed');
+      poolMock.query.mockImplementationOnce((query, callback) => {
+        callback(error); // Simulates query failure
+      });
+
+      await expect(errsolePostgres.DeleteAllLogs()).rejects.toThrow('Truncate query failed');
+
+      expect(poolMock.query).toHaveBeenCalledWith(truncateQuery, expect.any(Function));
     });
   });
 
