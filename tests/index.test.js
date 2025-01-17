@@ -1962,6 +1962,37 @@ describe('ErrsolePostgres', () => {
     });
   });
 
+  describe('#deleteAllLogs', () => {
+    let poolQuerySpy;
+
+    beforeEach(() => {
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+      poolMock.query.mockClear(); // Clear any previous calls
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should delete all logs and reset the table identity', async () => {
+      poolMock.query.mockResolvedValueOnce({});
+
+      const result = await errsolePostgres.deleteAllLogs();
+
+      expect(poolQuerySpy).toHaveBeenCalledWith('TRUNCATE TABLE errsole_logs_v2 RESTART IDENTITY CASCADE');
+      expect(result).toEqual({});
+    });
+
+    it('should throw an error if the query fails', async () => {
+      const error = new Error('Query error');
+      poolMock.query.mockRejectedValueOnce(error);
+
+      await expect(errsolePostgres.deleteAllLogs()).rejects.toThrow('Query error');
+
+      expect(poolQuerySpy).toHaveBeenCalledWith('TRUNCATE TABLE errsole_logs_v2 RESTART IDENTITY CASCADE');
+    });
+  });
+
   afterAll(() => {
     cronJob.stop();
     clearInterval(errsolePostgres.flushIntervalId);
