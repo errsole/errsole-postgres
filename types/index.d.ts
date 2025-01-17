@@ -59,7 +59,7 @@ declare module 'errsole-postgres' {
       postLogs(logEntries: Log[]): Promise<{}>;
       getLogs(filters?: LogFilter): Promise<{ items: Log[] }>;
       searchLogs(searchTerms: string[], filters?: LogFilter): Promise<{ items: Log[], filters: LogFilter[] }>;
-      DeleteAllLogs(): Promise<void>;
+      DeleteAllLogs(): Promise<{}>;
   
       getMeta(id: number): Promise<{ item: { id: number; meta: string } }>;
   

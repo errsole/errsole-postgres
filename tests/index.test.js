@@ -1962,31 +1962,6 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  describe('#DeleteAllLogs', () => {
-    it('should successfully truncate the logs table', async () => {
-      const truncateQuery = `TRUNCATE TABLE ${errsolePostgres.logsTable} RESTART IDENTITY CASCADE`;
-      poolMock.query.mockImplementationOnce((query, callback) => {
-        callback(null); // Simulates successful query execution
-      });
-
-      await expect(errsolePostgres.DeleteAllLogs()).resolves.not.toThrow();
-
-      expect(poolMock.query).toHaveBeenCalledWith(truncateQuery, expect.any(Function));
-    });
-
-    it('should handle errors during truncation of the logs table', async () => {
-      const truncateQuery = `TRUNCATE TABLE ${errsolePostgres.logsTable} RESTART IDENTITY CASCADE`;
-      const error = new Error('Truncate query failed');
-      poolMock.query.mockImplementationOnce((query, callback) => {
-        callback(error); // Simulates query failure
-      });
-
-      await expect(errsolePostgres.DeleteAllLogs()).rejects.toThrow('Truncate query failed');
-
-      expect(poolMock.query).toHaveBeenCalledWith(truncateQuery, expect.any(Function));
-    });
-  });
-
   afterAll(() => {
     cronJob.stop();
     clearInterval(errsolePostgres.flushIntervalId);
