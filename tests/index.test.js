@@ -2,6 +2,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const cron = require('node-cron');
 const ErrsolePostgres = require('../lib/index'); // Adjust the path as needed
+const { describe } = require('@jest/globals');
 /* globals expect, jest, beforeEach, it, afterEach, describe, afterAll */
 
 jest.mock('pg', () => {
@@ -1992,7 +1993,6 @@ describe('ErrsolePostgres', () => {
       expect(poolQuerySpy).toHaveBeenCalledWith('TRUNCATE TABLE errsole_logs_v2 RESTART IDENTITY CASCADE');
     });
   });
-
   afterAll(() => {
     cronJob.stop();
     clearInterval(errsolePostgres.flushIntervalId);
