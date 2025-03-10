@@ -1106,66 +1106,6 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  // describe('#ensureLogsTTL', () => {
-  //   let getConfigSpy;
-  //   let setConfigSpy; it('should handle query errors during user password update', async () => {
-  //     const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
-  //     poolMock.query
-  //       .mockResolvedValueOnce({ rows: [user] }) // First query response
-  //       .mockRejectedValueOnce(new Error('Query error')); // Second query response
-  //     bcrypt.compare.mockResolvedValue(true);
-  //     bcrypt.hash.mockResolvedValue('newHashedPassword');
-
-  //     await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Query error');
-  //   });
-
-  //   beforeEach(() => {
-  //     getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig');
-  //     setConfigSpy = jest.spyOn(errsolePostgres, 'setConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
-  //   });
-
-  //   afterEach(() => {
-  //     jest.clearAllMocks();
-  //   });
-
-  //   it('should set default logsTTL if config does not exist', async () => {
-  //     getConfigSpy.mockResolvedValueOnce({ item: null });
-
-  //     await errsolePostgres.ensureLogsTTL();
-
-  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-  //     expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
-  //   });
-
-  //   it('should not set logsTTL if config already exists', async () => {
-  //     getConfigSpy.mockResolvedValueOnce({ item: { key: 'logsTTL', value: '2592000000' } });
-
-  //     await errsolePostgres.ensureLogsTTL();
-
-  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-  //     expect(setConfigSpy).not.toHaveBeenCalled();
-  //   });
-
-  //   it('should handle errors in getting configuration', async () => {
-  //     getConfigSpy.mockRejectedValueOnce(new Error('Query error'));
-
-  //     await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
-
-  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-  //     expect(setConfigSpy).not.toHaveBeenCalled();
-  //   });
-
-  //   it('should handle errors in setting configuration', async () => {
-  //     getConfigSpy.mockResolvedValueOnce({ item: null });
-  //     setConfigSpy.mockRejectedValueOnce(new Error('Query error'));
-
-  //     await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
-
-  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-  //     expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
-  //   });
-  // });
-
   describe('#getHostnames', () => {
     let poolQuerySpy;
 
