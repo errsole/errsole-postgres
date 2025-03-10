@@ -1687,6 +1687,171 @@ describe('ErrsolePostgres', () => {
     });
   });
 
+  describe('#flushLogs', () => {
+    let fakeRelease;
+    let fakeClient;
+
+    beforeEach(() => {
+      // Set the logs table and clear pendingLogs and reset the connection flag.
+      errsolePostgres.logsTable = 'errsole_logs_v3';
+      errsolePostgres.pendingLogs = [];
+      errsolePostgres.isConnectionInProgress = false;
+
+      // Reset any previous mocks for pool.connect
+      jest.spyOn(errsolePostgres.pool, 'connect').mockRestore();
+    });
+
+    it('should return {} immediately if no logs to flush', async () => {
+      errsolePostgres.pendingLogs = []; // Ensure no logs are pending
+      const result = await errsolePostgres.flushLogs();
+      expect(result).toEqual({});
+      // Since there are no logs, pool.connect should not be called.
+      expect(errsolePostgres.pool.connect).not.toHaveBeenCalled();
+    });
+
+    it('should flush logs and resolve {} when logs are present and query succeeds', async () => {
+      const sampleLog = {
+        timestamp: new Date('2023-01-01T00:00:00Z'),
+        hostname: 'localhost',
+        pid: 1234,
+        source: 'test',
+        level: 'info',
+        message: 'test message',
+        meta: 'meta data',
+        errsole_id: 'err1'
+      };
+      errsolePostgres.pendingLogs = [sampleLog];
+
+      fakeRelease = jest.fn();
+      fakeClient = {
+        query: jest.fn((query, queryParams, callback) => {
+          // Simulate a successful query execution
+          callback(null);
+        })
+      };
+
+      // Override pool.connect to simulate a callback-style connection.
+      jest.spyOn(errsolePostgres.pool, 'connect').mockImplementation((callback) => {
+        callback(null, fakeClient, fakeRelease);
+      });
+
+      const result = await errsolePostgres.flushLogs();
+
+      // Verify that pendingLogs is cleared after flush.
+      expect(errsolePostgres.pendingLogs).toEqual([]);
+      // Check that the client.query was called with a query that contains the INSERT statement.
+      expect(fakeClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO errsole_logs_v3'),
+        expect.any(Array),
+        expect.any(Function)
+      );
+      // Verify that the client was released.
+      expect(fakeRelease).toHaveBeenCalled();
+      // Ensure the flushLogs method resolved with an empty object.
+      expect(result).toEqual({});
+    });
+
+    it('should wait if isConnectionInProgress is true and then flush logs', async () => {
+      // Use fake timers to simulate waiting.
+      jest.useFakeTimers();
+      errsolePostgres.isConnectionInProgress = true;
+
+      const sampleLog = {
+        timestamp: new Date('2023-01-01T00:00:00Z'),
+        hostname: 'localhost',
+        pid: 1234,
+        source: 'test',
+        level: 'info',
+        message: 'test message',
+        meta: 'meta data',
+        errsole_id: 'err1'
+      };
+      errsolePostgres.pendingLogs = [sampleLog];
+
+      fakeRelease = jest.fn();
+      fakeClient = {
+        query: jest.fn((query, queryParams, callback) => {
+          callback(null);
+        })
+      };
+
+      jest.spyOn(errsolePostgres.pool, 'connect').mockImplementation((callback) => {
+        callback(null, fakeClient, fakeRelease);
+      });
+
+      // Start flushLogs. It should wait until isConnectionInProgress is false.
+      const flushPromise = errsolePostgres.flushLogs();
+
+      // After 150ms, mark connection as no longer in progress.
+      setTimeout(() => {
+        errsolePostgres.isConnectionInProgress = false;
+      }, 150);
+
+      // Fast-forward timers.
+      jest.advanceTimersByTime(200);
+      const result = await flushPromise;
+
+      // Restore real timers.
+      jest.useRealTimers();
+
+      expect(errsolePostgres.pendingLogs).toEqual([]);
+      expect(fakeClient.query).toHaveBeenCalled();
+      expect(fakeRelease).toHaveBeenCalled();
+      expect(result).toEqual({});
+    });
+
+    it('should reject if pool.connect returns an error', async () => {
+      const sampleLog = {
+        timestamp: new Date('2023-01-01T00:00:00Z'),
+        hostname: 'localhost',
+        pid: 1234,
+        source: 'test',
+        level: 'info',
+        message: 'test message',
+        meta: 'meta data',
+        errsole_id: 'err1'
+      };
+      errsolePostgres.pendingLogs = [sampleLog];
+
+      const connectError = new Error('Connection failed');
+      jest.spyOn(errsolePostgres.pool, 'connect').mockImplementation((callback) => {
+        callback(connectError);
+      });
+
+      await expect(errsolePostgres.flushLogs()).rejects.toThrow('Connection failed');
+    });
+
+    it('should reject if client.query returns an error', async () => {
+      const sampleLog = {
+        timestamp: new Date('2023-01-01T00:00:00Z'),
+        hostname: 'localhost',
+        pid: 1234,
+        source: 'test',
+        level: 'info',
+        message: 'test message',
+        meta: 'meta data',
+        errsole_id: 'err1'
+      };
+      errsolePostgres.pendingLogs = [sampleLog];
+
+      fakeRelease = jest.fn();
+      fakeClient = {
+        query: jest.fn((query, queryParams, callback) => {
+          // Simulate a query failure.
+          callback(new Error('Query failed'));
+        })
+      };
+
+      jest.spyOn(errsolePostgres.pool, 'connect').mockImplementation((callback) => {
+        callback(null, fakeClient, fakeRelease);
+      });
+
+      await expect(errsolePostgres.flushLogs()).rejects.toThrow('Query failed');
+      // Even if the query fails, the client should be released.
+      expect(fakeRelease).toHaveBeenCalled();
+    });
+  });
+
   afterAll(() => {
     cronJob.stop();
     clearInterval(errsolePostgres.flushIntervalId);
