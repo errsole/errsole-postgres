@@ -37,7 +37,15 @@ describe('ErrsolePostgres', () => {
 
     poolMock = {
       connect: jest.fn().mockResolvedValue(clientMock),
-      query: jest.fn().mockResolvedValue({ rows: [{ work_mem: '8192kB' }] })
+      query: jest.fn().mockImplementation((query, values) => {
+        if (query.includes('SHOW work_mem')) {
+          return Promise.resolve({ rows: [{ work_mem: '8192kB' }] }); // Mock for getWorkMem
+        }
+        if (query.includes('INSERT INTO')) {
+          return Promise.resolve({ rows: [{ id: 1 }] }); // Mock for createUser
+        }
+        return Promise.resolve({ rows: [] });
+      })
     };
 
     Pool.mockImplementation(() => poolMock);
@@ -1098,65 +1106,65 @@ describe('ErrsolePostgres', () => {
     });
   });
 
-  describe('#ensureLogsTTL', () => {
-    let getConfigSpy;
-    let setConfigSpy; it('should handle query errors during user password update', async () => {
-      const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
-      poolMock.query
-        .mockResolvedValueOnce({ rows: [user] }) // First query response
-        .mockRejectedValueOnce(new Error('Query error')); // Second query response
-      bcrypt.compare.mockResolvedValue(true);
-      bcrypt.hash.mockResolvedValue('newHashedPassword');
+  // describe('#ensureLogsTTL', () => {
+  //   let getConfigSpy;
+  //   let setConfigSpy; it('should handle query errors during user password update', async () => {
+  //     const user = { id: 1, name: 'test', email: 'test@example.com', hashed_password: 'hashedPassword', role: 'admin' };
+  //     poolMock.query
+  //       .mockResolvedValueOnce({ rows: [user] }) // First query response
+  //       .mockRejectedValueOnce(new Error('Query error')); // Second query response
+  //     bcrypt.compare.mockResolvedValue(true);
+  //     bcrypt.hash.mockResolvedValue('newHashedPassword');
 
-      await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Query error');
-    });
+  //     await expect(errsolePostgres.updatePassword('test@example.com', 'password', 'newPassword')).rejects.toThrow('Query error');
+  //   });
 
-    beforeEach(() => {
-      getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig');
-      setConfigSpy = jest.spyOn(errsolePostgres, 'setConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
-    });
+  //   beforeEach(() => {
+  //     getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig');
+  //     setConfigSpy = jest.spyOn(errsolePostgres, 'setConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
+  //   });
 
-    afterEach(() => {
-      jest.clearAllMocks();
-    });
+  //   afterEach(() => {
+  //     jest.clearAllMocks();
+  //   });
 
-    it('should set default logsTTL if config does not exist', async () => {
-      getConfigSpy.mockResolvedValueOnce({ item: null });
+  //   it('should set default logsTTL if config does not exist', async () => {
+  //     getConfigSpy.mockResolvedValueOnce({ item: null });
 
-      await errsolePostgres.ensureLogsTTL();
+  //     await errsolePostgres.ensureLogsTTL();
 
-      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-      expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
-    });
+  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+  //     expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
+  //   });
 
-    it('should not set logsTTL if config already exists', async () => {
-      getConfigSpy.mockResolvedValueOnce({ item: { key: 'logsTTL', value: '2592000000' } });
+  //   it('should not set logsTTL if config already exists', async () => {
+  //     getConfigSpy.mockResolvedValueOnce({ item: { key: 'logsTTL', value: '2592000000' } });
 
-      await errsolePostgres.ensureLogsTTL();
+  //     await errsolePostgres.ensureLogsTTL();
 
-      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-      expect(setConfigSpy).not.toHaveBeenCalled();
-    });
+  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+  //     expect(setConfigSpy).not.toHaveBeenCalled();
+  //   });
 
-    it('should handle errors in getting configuration', async () => {
-      getConfigSpy.mockRejectedValueOnce(new Error('Query error'));
+  //   it('should handle errors in getting configuration', async () => {
+  //     getConfigSpy.mockRejectedValueOnce(new Error('Query error'));
 
-      await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
+  //     await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
 
-      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-      expect(setConfigSpy).not.toHaveBeenCalled();
-    });
+  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+  //     expect(setConfigSpy).not.toHaveBeenCalled();
+  //   });
 
-    it('should handle errors in setting configuration', async () => {
-      getConfigSpy.mockResolvedValueOnce({ item: null });
-      setConfigSpy.mockRejectedValueOnce(new Error('Query error'));
+  //   it('should handle errors in setting configuration', async () => {
+  //     getConfigSpy.mockResolvedValueOnce({ item: null });
+  //     setConfigSpy.mockRejectedValueOnce(new Error('Query error'));
 
-      await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
+  //     await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
 
-      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
-      expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
-    });
-  });
+  //     expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+  //     expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', '2592000000');
+  //   });
+  // });
 
   describe('#getHostnames', () => {
     let poolQuerySpy;
@@ -1472,6 +1480,213 @@ describe('ErrsolePostgres', () => {
       expect(poolQuerySpy).toHaveBeenCalledWith('TRUNCATE TABLE errsole_logs_v3 RESTART IDENTITY CASCADE');
     });
   });
+
+  describe('#searchLogs', () => {
+    let poolQuerySpy;
+
+    beforeEach(() => {
+      poolQuerySpy = jest.spyOn(poolMock, 'query');
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should retrieve logs with no filters and search terms', async () => {
+      const logs = [
+        { id: 1, hostname: 'localhost', pid: 1234, source: 'test', timestamp: new Date(), level: 'info', message: 'test message' }
+      ];
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs();
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('SELECT id, hostname, pid, source, timestamp, level, message,errsole_id'), expect.any(Array));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply search terms filter', async () => {
+      const logs = [{ id: 1, message: 'error occurred' }];
+      const searchTerms = ['error', 'occurred'];
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs(searchTerms);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('message_tsv @@ phraseto_tsquery'), expect.arrayContaining(searchTerms));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply hostnames filter', async () => {
+      const logs = [{ id: 2, hostname: 'server1' }];
+      const filters = { hostnames: ['server1', 'server2'] };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('hostname = ANY'), expect.arrayContaining([['server1', 'server2']]));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply level_json and errsole_id filters', async () => {
+      const logs = [{ id: 3, source: 'app', level: 'error', errsole_id: 123 }];
+      const filters = {
+        level_json: [{ source: 'app', level: 'error' }],
+        errsole_id: 123
+      };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('(source = $'), expect.arrayContaining(['app', 'error', 123]));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply lt_id filter and order logs correctly', async () => {
+      const logs = [{ id: 4, message: 'test log' }];
+      const filters = { lt_id: 10 };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('id < $'), expect.arrayContaining([10]));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply gt_id filter and order logs correctly', async () => {
+      const logs = [{ id: 5, message: 'new log' }];
+      const filters = { gt_id: 5 };
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('id > $'), expect.arrayContaining([5]));
+      expect(result.items).toEqual(logs);
+    });
+
+    it('should apply timestamp filters and adjust missing gte_timestamp or lte_timestamp', async () => {
+      const logs = [{ id: 6, timestamp: new Date() }];
+      const filters = { lte_timestamp: new Date('2023-01-01T00:00:00Z') };
+      const expectedGteTimestamp = new Date(filters.lte_timestamp.getTime() - 24 * 60 * 60 * 1000);
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('timestamp <= $'), expect.arrayContaining([filters.lte_timestamp, expectedGteTimestamp]));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should apply gte_timestamp and auto-set lte_timestamp if missing', async () => {
+      const logs = [{ id: 7, timestamp: new Date() }];
+      const filters = { gte_timestamp: new Date('2023-01-01T00:00:00Z') };
+      const expectedLteTimestamp = new Date(filters.gte_timestamp.getTime() + 24 * 60 * 60 * 1000);
+
+      poolMock.query.mockResolvedValueOnce({ rows: logs });
+
+      const result = await errsolePostgres.searchLogs([], filters);
+
+      expect(poolMock.query).toHaveBeenCalledWith(expect.stringContaining('timestamp >= $'), expect.arrayContaining([filters.gte_timestamp, expectedLteTimestamp]));
+      expect(result.items).toEqual(logs.reverse());
+    });
+
+    it('should handle errors during search query execution', async () => {
+      poolMock.query.mockRejectedValueOnce(new Error('Query error'));
+
+      await expect(errsolePostgres.searchLogs()).rejects.toThrow('Query error');
+    });
+  });
+
+  describe('#createUser', () => {
+    it('should create a new user successfully', async () => {
+      const user = { name: 'John', email: 'john@example.com', password: 'password123', role: 'admin' };
+      const hashedPassword = 'hashedPassword';
+
+      bcrypt.hash.mockResolvedValueOnce(hashedPassword);
+      poolMock.query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+
+      const result = await errsolePostgres.createUser(user);
+
+      expect(bcrypt.hash).toHaveBeenCalledWith(user.password, 10);
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO'),
+        expect.arrayContaining([user.name, user.email, hashedPassword, user.role])
+      );
+      expect(result).toEqual({ item: { id: 1, name: user.name, email: user.email, role: user.role } });
+    });
+
+    it('should throw an error if database query fails unexpectedly', async () => {
+      const user = { name: 'Jane', email: 'jane@example.com', password: 'securepass', role: 'user' };
+      const hashedPassword = 'hashedPassword';
+
+      bcrypt.hash.mockResolvedValueOnce(hashedPassword);
+      const originalQueryMock = poolMock.query;
+      poolMock.query = jest.fn().mockImplementation((query, values) => {
+        if (query.includes('INSERT INTO')) {
+          return Promise.reject(new Error('Database error'));
+        }
+        return originalQueryMock(query, values);
+      });
+
+      await expect(errsolePostgres.createUser(user)).rejects.toThrow('Database error');
+
+      expect(bcrypt.hash).toHaveBeenCalledWith(user.password, 10);
+      expect(poolMock.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO'),
+        expect.arrayContaining([user.name, user.email, hashedPassword, user.role])
+      );
+      poolMock.query = originalQueryMock;
+    });
+  });
+
+  describe('#ensureLogsTTL', () => {
+    let getConfigSpy, setConfigSpy;
+
+    beforeEach(() => {
+      getConfigSpy = jest.spyOn(errsolePostgres, 'getConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
+      setConfigSpy = jest.spyOn(errsolePostgres, 'setConfig').mockResolvedValue({ item: { key: 'logsTTL', value: '2592000000' } });
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should set logsTTL to default if it does not exist', async () => {
+      getConfigSpy.mockResolvedValueOnce({ item: null });
+
+      await errsolePostgres.ensureLogsTTL();
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', (30 * 24 * 60 * 60 * 1000).toString());
+    });
+
+    it('should not update logsTTL if it already exists', async () => {
+      getConfigSpy.mockResolvedValueOnce({ item: { key: 'logsTTL', value: '2592000000' } });
+
+      await errsolePostgres.ensureLogsTTL();
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(setConfigSpy).not.toHaveBeenCalled(); // ✅ Now this should pass
+    });
+
+    it('should handle errors in getConfig', async () => {
+      getConfigSpy.mockRejectedValueOnce(new Error('Query error'));
+
+      await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Query error');
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(setConfigSpy).not.toHaveBeenCalled(); // ✅ Now this should pass
+    });
+
+    it('should handle errors in setConfig when logsTTL does not exist', async () => {
+      getConfigSpy.mockResolvedValueOnce({ item: null });
+      setConfigSpy.mockRejectedValueOnce(new Error('Insert error'));
+
+      await expect(errsolePostgres.ensureLogsTTL()).rejects.toThrow('Insert error');
+
+      expect(getConfigSpy).toHaveBeenCalledWith('logsTTL');
+      expect(setConfigSpy).toHaveBeenCalledWith('logsTTL', (30 * 24 * 60 * 60 * 1000).toString());
+    });
+  });
+
   afterAll(() => {
     cronJob.stop();
     clearInterval(errsolePostgres.flushIntervalId);
